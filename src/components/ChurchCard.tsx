@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Church } from "@/types";
 import { Star, Map, Clock, MapPin, Globe, ArrowRight, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import SwipeOverlay from "@/components/SwipeOverlay";
 
 interface ChurchCardProps {
   church: Church;
@@ -13,6 +14,7 @@ interface ChurchCardProps {
 const ChurchCard: React.FC<ChurchCardProps> = ({ church, onSwipe, onViewDetails }) => {
   const [dragging, setDragging] = useState<"left" | "right" | null>(null);
   const [swipeClass, setSwipeClass] = useState<string>("");
+  const [swipeProgress, setSwipeProgress] = useState<number>(0);
 
   // Calculate some display values
   const mainImage = church.images[0];
@@ -21,11 +23,17 @@ const ChurchCard: React.FC<ChurchCardProps> = ({ church, onSwipe, onViewDetails 
   // Handle touch/mouse gestures
   const handleDragStart = (clientX: number) => {
     setDragging(null);
+    setSwipeProgress(0);
     return clientX;
   };
 
   const handleDragMove = (startX: number, currentX: number) => {
     const deltaX = currentX - startX;
+    const cardWidth = document.querySelector('.swipe-card')?.clientWidth || 300;
+    const progress = Math.min(Math.abs(deltaX) / (cardWidth * 0.5), 1);
+    
+    setSwipeProgress(progress);
+    
     if (Math.abs(deltaX) < 50) {
       setDragging(null);
       return;
@@ -48,6 +56,7 @@ const ChurchCard: React.FC<ChurchCardProps> = ({ church, onSwipe, onViewDetails 
       }, 300);
     }
     setDragging(null);
+    setSwipeProgress(0);
   };
 
   // Mouse event handlers
@@ -72,6 +81,7 @@ const ChurchCard: React.FC<ChurchCardProps> = ({ church, onSwipe, onViewDetails 
     if (startX !== null) {
       setStartX(null);
       setDragging(null);
+      setSwipeProgress(0);
     }
   };
 
@@ -104,6 +114,9 @@ const ChurchCard: React.FC<ChurchCardProps> = ({ church, onSwipe, onViewDetails 
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Swipe overlay for YES/NO feedback */}
+      <SwipeOverlay direction={dragging} swipeProgress={swipeProgress} />
+      
       <div
         className="relative h-64 bg-cover bg-center"
         style={{ backgroundImage: `url(${mainImage})` }}

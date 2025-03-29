@@ -3,6 +3,8 @@ import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import ChurchCard from "@/components/ChurchCard";
 import SwipeControls from "@/components/SwipeControls";
+import SwipeOverlay from "@/components/SwipeOverlay";
+import SwipeInstructions from "@/components/SwipeInstructions";
 import ChurchDetails from "@/components/ChurchDetails";
 import { Church } from "@/types";
 import { churches as initialChurches } from "@/data/mockData";
@@ -14,12 +16,25 @@ const Discover = () => {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [showDetails, setShowDetails] = useState<boolean>(false);
   const [matches, setMatches] = useState<Record<string, boolean>>({});
+  const [isCardAnimating, setIsCardAnimating] = useState<boolean>(false);
+  const [showInstructions, setShowInstructions] = useState<boolean>(false);
   const { toast } = useToast();
 
   const currentChurch = churches[currentIndex];
   const isLastCard = currentIndex === churches.length - 1;
 
+  // Check if it's the user's first visit and show instructions
+  useEffect(() => {
+    const hasSeenInstructions = localStorage.getItem('hasSeenSwipeInstructions');
+    if (!hasSeenInstructions) {
+      setShowInstructions(true);
+      localStorage.setItem('hasSeenSwipeInstructions', 'true');
+    }
+  }, []);
+
   const handleSwipe = (direction: "left" | "right") => {
+    setIsCardAnimating(true);
+    
     // Record the match
     if (direction === "right") {
       setMatches(prev => ({
@@ -35,13 +50,16 @@ const Discover = () => {
       });
     }
 
-    // Move to the next card
-    if (currentIndex < churches.length - 1) {
-      setCurrentIndex(prevIndex => prevIndex + 1);
-    } else {
-      // Reset if we've gone through all cards
-      resetCards();
-    }
+    // Move to the next card after animation completes
+    setTimeout(() => {
+      if (currentIndex < churches.length - 1) {
+        setCurrentIndex(prevIndex => prevIndex + 1);
+      } else {
+        // Reset if we've gone through all cards
+        resetCards();
+      }
+      setIsCardAnimating(false);
+    }, 300);
   };
 
   const resetCards = () => {
@@ -80,6 +98,7 @@ const Discover = () => {
                   <SwipeControls
                     onSwipeLeft={() => handleSwipe("left")}
                     onSwipeRight={() => handleSwipe("right")}
+                    isAnimating={isCardAnimating}
                   />
                 </>
               ) : (
@@ -106,6 +125,11 @@ const Discover = () => {
             onClose={() => setShowDetails(false)}
           />
         )}
+
+        <SwipeInstructions 
+          isOpen={showInstructions}
+          onClose={() => setShowInstructions(false)}
+        />
       </div>
     </Layout>
   );
