@@ -1,10 +1,13 @@
 
-import React from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { 
   User, 
   Settings, 
@@ -13,11 +16,78 @@ import {
   Lock, 
   HelpCircle, 
   LogOut, 
-  ChevronRight 
+  ChevronRight,
+  Save
 } from "lucide-react";
 import { currentProfile } from "@/data/mockData";
+import { useToast } from "@/hooks/use-toast";
 
 const Profile = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showEditPreferences, setShowEditPreferences] = useState(false);
+  
+  // Profile edit state
+  const [profileForm, setProfileForm] = useState({
+    name: currentProfile.name,
+    age: currentProfile.age
+  });
+  
+  // Church preferences edit state
+  const [preferencesForm, setPreferencesForm] = useState({
+    maxDistance: currentProfile.preferences.maxDistance,
+    serviceFormality: currentProfile.preferences.serviceFormality,
+    sizePreference: currentProfile.preferences.sizePreference
+  });
+
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setProfileForm(prev => ({
+      ...prev,
+      [name]: name === 'age' ? parseInt(value) || '' : value
+    }));
+  };
+
+  const handlePreferencesChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setPreferencesForm(prev => ({
+      ...prev,
+      [name]: name === 'maxDistance' ? parseInt(value) || 5 : value
+    }));
+  };
+
+  const handleSaveProfile = () => {
+    // Here you would save the profile data to your database
+    toast({
+      title: "Profile Updated",
+      description: "Your profile has been successfully updated.",
+    });
+    setShowEditProfile(false);
+  };
+
+  const handleSavePreferences = () => {
+    // Here you would save the preferences to your database
+    toast({
+      title: "Preferences Updated",
+      description: "Your church preferences have been successfully updated.",
+    });
+    setShowEditPreferences(false);
+  };
+
+  const handleSignOut = () => {
+    // Here you would sign out the user
+    toast({
+      title: "Signed Out",
+      description: "You have been successfully signed out.",
+    });
+    
+    // Navigate to the landing page
+    setTimeout(() => {
+      navigate("/");
+    }, 1000);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -37,7 +107,12 @@ const Profile = () => {
               <h2 className="text-xl font-semibold">{currentProfile.name}</h2>
               <p className="text-muted-foreground">Age: {currentProfile.age}</p>
             </div>
-            <Button variant="outline" size="sm" className="ml-auto">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="ml-auto"
+              onClick={() => setShowEditProfile(true)}
+            >
               Edit
             </Button>
           </div>
@@ -127,6 +202,7 @@ const Profile = () => {
 
                 <Button
                   className="w-full bg-church-purple hover:bg-church-purple/90 mt-2"
+                  onClick={() => setShowEditPreferences(true)}
                 >
                   Update Church Preferences
                 </Button>
@@ -185,13 +261,127 @@ const Profile = () => {
             
             <Separator />
             
-            <Button variant="destructive" className="w-full">
+            <Button 
+              variant="destructive" 
+              className="w-full"
+              onClick={handleSignOut}
+            >
               <LogOut className="h-4 w-4 mr-2" />
               Sign Out
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={showEditProfile} onOpenChange={setShowEditProfile}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Profile</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">Name</Label>
+              <Input 
+                id="edit-name" 
+                name="name" 
+                value={profileForm.name} 
+                onChange={handleProfileChange}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-age">Age</Label>
+              <Input 
+                id="edit-age" 
+                name="age" 
+                type="number" 
+                min="1"
+                value={profileForm.age} 
+                onChange={handleProfileChange}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowEditProfile(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveProfile}>
+              <Save className="h-4 w-4 mr-2" />
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Church Preferences Dialog */}
+      <Dialog open={showEditPreferences} onOpenChange={setShowEditPreferences}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Update Church Preferences</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="maxDistance">Maximum Distance (miles)</Label>
+              <Input 
+                id="maxDistance" 
+                name="maxDistance" 
+                type="number" 
+                min="1"
+                max="100"
+                value={preferencesForm.maxDistance} 
+                onChange={handlePreferencesChange}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="serviceFormality">Service Style</Label>
+              <select 
+                id="serviceFormality"
+                name="serviceFormality"
+                value={preferencesForm.serviceFormality}
+                onChange={handlePreferencesChange}
+                className="w-full p-2 border border-gray-300 rounded-md"
+              >
+                <option value="Casual">Casual</option>
+                <option value="Formal">Formal</option>
+                <option value="Mixed">Mixed</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sizePreference">Church Size</Label>
+              <select 
+                id="sizePreference"
+                name="sizePreference"
+                value={preferencesForm.sizePreference}
+                onChange={handlePreferencesChange}
+                className="w-full p-2 border border-gray-300 rounded-md"
+              >
+                <option value="Small">Small</option>
+                <option value="Medium">Medium</option>
+                <option value="Large">Large</option>
+                <option value="Megachurch">Megachurch</option>
+              </select>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              For more detailed preferences like denomination and worship style, please complete the onboarding questionnaire again.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowEditPreferences(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSavePreferences}>
+              <Save className="h-4 w-4 mr-2" />
+              Save Preferences
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

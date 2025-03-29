@@ -17,20 +17,24 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { ArrowLeft, ArrowRight, MapPin, User, Church } from "lucide-react";
 import { questionnaireData } from "@/data/mockData";
+import { useToast } from "@/hooks/use-toast";
 
 const Onboarding = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [formData, setFormData] = useState({
     name: "",
     age: "",
     location: {
       latitude: 0,
       longitude: 0,
-      permissionGranted: false
+      permissionGranted: false,
+      displayAddress: ""
     },
     preferences: {} as Record<string, any>
   });
+  const { toast } = useToast();
 
   const steps = [
     { title: "Personal Info", description: "Let's start with some basic information" },
@@ -41,12 +45,45 @@ const Onboarding = () => {
     }))
   ];
 
+  const validatePersonalInfo = () => {
+    const newErrors: {[key: string]: string} = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = "Name is required";
+    }
+    
+    if (!formData.age) {
+      newErrors.age = "Age is required";
+    } else if (parseInt(formData.age) <= 0) {
+      newErrors.age = "Age must be a positive number";
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    
+    if (name === "age" && value !== "") {
+      // Only allow positive numbers for age
+      const numValue = parseInt(value);
+      if (numValue <= 0) return;
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    
+    // Clear error when user types
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = {...prev};
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
   const handleCheckboxChange = (id: string, value: string, checked: boolean) => {
@@ -86,31 +123,78 @@ const Onboarding = () => {
     }));
   };
 
-  const requestLocation = () => {
+  const getAddressFromCoordinates = async (latitude: number, longitude: number) => {
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`
+      );
+      const data = await response.json();
+      
+      // Format the address to show city, state/region and country
+      let displayAddress = "";
+      if (data.address) {
+        const { city, town, village, county, state, country } = data.address;
+        const locality = city || town || village || county || "";
+        displayAddress = locality 
+          ? `${locality}, ${state || ""} ${country || ""}` 
+          : `${state || ""} ${country || ""}`;
+      }
+      
+      return displayAddress.trim();
+    } catch (error) {
+      console.error("Error getting address:", error);
+      return "";
+    }
+  };
+
+  const requestLocation = async () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
+          const latitude = position.coords.latitude;
+          const longitude = position.coords.longitude;
+          
+          // Get address from coordinates
+          const displayAddress = await getAddressFromCoordinates(latitude, longitude);
+          
           setFormData(prev => ({
             ...prev,
             location: {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              permissionGranted: true
+              latitude,
+              longitude,
+              permissionGranted: true,
+              displayAddress
             }
           }));
         },
         (error) => {
           console.error("Error getting location:", error);
+          toast({
+            title: "Location Error",
+            description: "Unable to get your location. Please try again.",
+            variant: "destructive"
+          });
         }
       );
     }
   };
 
   const handleNext = () => {
+    if (step === 0) {
+      // Validate personal info before proceeding
+      if (!validatePersonalInfo()) {
+        return;
+      }
+    }
+    
     if (step < steps.length - 1) {
       setStep(prev => prev + 1);
     } else {
       // Submit form data and navigate to discover page
+      toast({
+        title: "Onboarding Complete!",
+        description: "Your profile has been set up. Let's find your church match!",
+      });
       navigate("/discover");
     }
   };
@@ -136,7 +220,11 @@ const Onboarding = () => {
               value={formData.name} 
               onChange={handleInputChange} 
               placeholder="John Doe"
+              className={errors.name ? "border-red-500" : ""}
             />
+            {errors.name && (
+              <p className="text-red-500 text-sm">{errors.name}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="age">Your Age</Label>
@@ -144,10 +232,15 @@ const Onboarding = () => {
               id="age" 
               name="age" 
               type="number" 
+              min="1"
               value={formData.age} 
               onChange={handleInputChange} 
               placeholder="30"
+              className={errors.age ? "border-red-500" : ""}
             />
+            {errors.age && (
+              <p className="text-red-500 text-sm">{errors.age}</p>
+            )}
           </div>
         </div>
       );
@@ -167,9 +260,16 @@ const Onboarding = () => {
                   We'll use this to find churches near you.
                 </p>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Coordinates: {formData.location.latitude.toFixed(6)}, {formData.location.longitude.toFixed(6)}
-              </p>
+              
+              {formData.location.displayAddress ? (
+                <p className="font-medium text-muted-foreground">
+                  Your location: {formData.location.displayAddress}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Coordinates: {formData.location.latitude.toFixed(6)}, {formData.location.longitude.toFixed(6)}
+                </p>
+              )}
             </div>
           ) : (
             <div className="text-center space-y-4">

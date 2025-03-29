@@ -11,7 +11,8 @@ import {
   ThumbsUp, 
   ThumbsDown,
   FileEdit,
-  Trash
+  Trash,
+  AlertTriangle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,9 +39,29 @@ import { cn } from "@/lib/utils";
 import { useForm } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import ChurchDetails from "@/components/ChurchDetails";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+// Define a visit type
+interface Visit {
+  churchId: string;
+  visitDate: string;
+  rating: number;
+  notes: string;
+  didAlignExpectations: boolean;
+  manualChurchName?: string;  // New field for manual church entry
+}
 
 // Mock visit data (in a real app, this would come from the database)
-const mockVisits = [
+const initialVisits: Visit[] = [
   {
     churchId: "1",
     visitDate: "2023-08-15",
@@ -59,6 +80,7 @@ const mockVisits = [
 
 interface VisitFormValues {
   churchId: string;
+  manualChurchName?: string;
   visitDate: Date;
   rating: number;
   notes: string;
@@ -71,11 +93,16 @@ const Visits = () => {
   const [selectedVisitIndex, setSelectedVisitIndex] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [detailChurch, setDetailChurch] = useState<Church | null>(null);
+  const [visits, setVisits] = useState<Visit[]>(initialVisits);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [visitToDelete, setVisitToDelete] = useState<number | null>(null);
+  const [useManualEntry, setUseManualEntry] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<VisitFormValues>({
     defaultValues: {
       churchId: "",
+      manualChurchName: "",
       visitDate: new Date(),
       rating: 0,
       notes: "",
@@ -85,20 +112,22 @@ const Visits = () => {
 
   // Get churches that have been visited
   const visitedChurches = allChurches.filter(church => 
-    mockVisits.some(visit => visit.churchId === church.id)
+    visits.some(visit => visit.churchId === church.id)
   );
 
   // Get churches that haven't been visited yet (for the "Log a Visit" dropdown)
   const nonVisitedChurches = allChurches.filter(church => 
-    !mockVisits.some(visit => visit.churchId === church.id)
+    !visits.some(visit => visit.churchId === church.id)
   );
 
   const handleLogVisit = (church?: Church) => {
     setSelectedChurch(church || null);
     setSelectedVisitIndex(null);
+    setUseManualEntry(!church);
     
     form.reset({
       churchId: church?.id || "",
+      manualChurchName: "",
       visitDate: new Date(),
       rating: 0,
       notes: "",
@@ -109,14 +138,16 @@ const Visits = () => {
   };
 
   const handleEditVisit = (visitIndex: number) => {
-    const visit = mockVisits[visitIndex];
-    const church = allChurches.find(c => c.id === visit.churchId);
+    const visit = visits[visitIndex];
+    let church = allChurches.find(c => c.id === visit.churchId);
     
     setSelectedChurch(church || null);
     setSelectedVisitIndex(visitIndex);
+    setUseManualEntry(!!visit.manualChurchName);
     
     form.reset({
       churchId: visit.churchId,
+      manualChurchName: visit.manualChurchName || "",
       visitDate: new Date(visit.visitDate),
       rating: visit.rating,
       notes: visit.notes,
@@ -127,13 +158,36 @@ const Visits = () => {
   };
 
   const onSubmit = (data: VisitFormValues) => {
-    console.log("Form data:", data);
+    const newVisit: Visit = {
+      churchId: useManualEntry ? "" : data.churchId,
+      manualChurchName: useManualEntry ? data.manualChurchName : undefined,
+      visitDate: format(data.visitDate, 'yyyy-MM-dd'),
+      rating: data.rating,
+      notes: data.notes,
+      didAlignExpectations: data.didAlignExpectations
+    };
     
-    toast({
-      title: selectedVisitIndex !== null ? "Visit Updated" : "Visit Logged",
-      description: `Your visit to ${selectedChurch?.name} has been ${selectedVisitIndex !== null ? 'updated' : 'recorded'}.`,
-      duration: 3000,
-    });
+    if (selectedVisitIndex !== null) {
+      // Updating an existing visit
+      const updatedVisits = [...visits];
+      updatedVisits[selectedVisitIndex] = newVisit;
+      setVisits(updatedVisits);
+      
+      toast({
+        title: "Visit Updated",
+        description: `Your visit to ${useManualEntry ? data.manualChurchName : selectedChurch?.name} has been updated.`,
+        duration: 3000,
+      });
+    } else {
+      // Adding a new visit
+      setVisits(prev => [...prev, newVisit]);
+      
+      toast({
+        title: "Visit Logged",
+        description: `Your visit to ${useManualEntry ? data.manualChurchName : selectedChurch?.name} has been recorded.`,
+        duration: 3000,
+      });
+    }
     
     setVisitDialogOpen(false);
   };
@@ -141,6 +195,38 @@ const Visits = () => {
   const handleViewChurchDetails = (church: Church) => {
     setDetailChurch(church);
     setShowDetails(true);
+  };
+
+  const handleDeleteVisit = (visitIndex: number) => {
+    setVisitToDelete(visitIndex);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeleteVisit = () => {
+    if (visitToDelete === null) return;
+    
+    const visit = visits[visitToDelete];
+    const church = allChurches.find(c => c.id === visit.churchId);
+    const churchName = visit.manualChurchName || church?.name || "this church";
+    
+    // Remove the visit
+    setVisits(prev => prev.filter((_, index) => index !== visitToDelete));
+    
+    toast({
+      title: "Visit Deleted",
+      description: `Your visit to ${churchName} has been deleted.`,
+      duration: 3000,
+    });
+    
+    setShowDeleteDialog(false);
+    setVisitToDelete(null);
+  };
+  
+  // Helper function to get church name (from id or manual entry)
+  const getChurchName = (visit: Visit): string => {
+    if (visit.manualChurchName) return visit.manualChurchName;
+    const church = allChurches.find(c => c.id === visit.churchId);
+    return church?.name || "Unknown Church";
   };
 
   // Render stars for ratings
@@ -151,6 +237,13 @@ const Visits = () => {
         className={`h-4 w-4 ${i < rating ? 'text-church-gold fill-church-gold' : 'text-gray-300'}`} 
       />
     ));
+  };
+
+  // Toggle between church dropdown and manual entry
+  const toggleEntryMethod = () => {
+    setUseManualEntry(!useManualEntry);
+    form.setValue("churchId", "");
+    form.setValue("manualChurchName", "");
   };
 
   return (
@@ -208,20 +301,21 @@ const Visits = () => {
           </Popover>
         </div>
 
-        {visitedChurches.length > 0 ? (
+        {visits.length > 0 ? (
           <div className="space-y-4">
-            {mockVisits.map((visit, index) => {
-              const church = allChurches.find(c => c.id === visit.churchId);
-              if (!church) return null;
+            {visits.map((visit, index) => {
+              // Find church from churchId if not a manual entry
+              const church = visit.churchId ? allChurches.find(c => c.id === visit.churchId) : null;
+              const churchName = visit.manualChurchName || church?.name || "Unknown Church";
               
               return (
                 <div 
-                  key={`${visit.churchId}-${visit.visitDate}`} 
+                  key={`${visit.churchId || visit.manualChurchName}-${visit.visitDate}-${index}`} 
                   className="bg-white rounded-lg shadow-md overflow-hidden border border-border"
                 >
                   <div className="flex items-center p-4 border-b border-border">
                     <div className="flex-1">
-                      <h3 className="font-bold">{church.name}</h3>
+                      <h3 className="font-bold">{churchName}</h3>
                       <div className="flex items-center mt-1 text-sm text-muted-foreground">
                         <Calendar className="h-4 w-4 mr-1" />
                         <span>Visited on {format(new Date(visit.visitDate), 'MMMM d, yyyy')}</span>
@@ -239,6 +333,7 @@ const Visits = () => {
                         variant="ghost"
                         size="icon"
                         className="text-red-500 hover:text-red-700"
+                        onClick={() => handleDeleteVisit(index)}
                       >
                         <Trash className="h-4 w-4" />
                       </Button>
@@ -271,25 +366,27 @@ const Visits = () => {
                       </div>
                     )}
                     
-                    <div className="flex space-x-2 pt-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="flex-1"
-                        onClick={() => handleViewChurchDetails(church)}
-                      >
-                        View Church
-                      </Button>
-                      {church.websiteUrl && (
+                    {church && (
+                      <div className="flex space-x-2 pt-2">
                         <Button 
                           variant="outline" 
-                          size="sm"
-                          onClick={() => window.open(church.websiteUrl, '_blank')}
+                          size="sm" 
+                          className="flex-1"
+                          onClick={() => handleViewChurchDetails(church)}
                         >
-                          Visit Website
+                          View Church
                         </Button>
-                      )}
-                    </div>
+                        {church.websiteUrl && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => window.open(church.websiteUrl, '_blank')}
+                          >
+                            Visit Website
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -322,32 +419,62 @@ const Visits = () => {
 
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                {/* Church Selection (only if not editing) */}
-                {!selectedChurch && (
-                  <FormField
-                    control={form.control}
-                    name="churchId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Church</FormLabel>
-                        <FormControl>
-                          <select
-                            className="w-full p-2 border border-input rounded-md"
-                            {...field}
-                          >
-                            <option value="">Select a church...</option>
-                            {allChurches.map(church => (
-                              <option key={church.id} value={church.id}>
-                                {church.name}
-                              </option>
-                            ))}
-                          </select>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                {/* Church Selection */}
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <FormLabel>Church</FormLabel>
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={toggleEntryMethod}
+                      className="text-xs"
+                    >
+                      {useManualEntry ? "Select from list" : "Enter manually"}
+                    </Button>
+                  </div>
+                  
+                  {useManualEntry ? (
+                    <FormField
+                      control={form.control}
+                      name="manualChurchName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <Input
+                              placeholder="Enter church name"
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <FormField
+                      control={form.control}
+                      name="churchId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormControl>
+                            <select
+                              className="w-full p-2 border border-input rounded-md"
+                              {...field}
+                            >
+                              <option value="">Select a church...</option>
+                              {allChurches.map(church => (
+                                <option key={church.id} value={church.id}>
+                                  {church.name}
+                                </option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
 
                 {/* Visit Date */}
                 <FormField
@@ -495,6 +622,31 @@ const Visits = () => {
             onClose={() => setShowDetails(false)}
           />
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
+                Delete Visit
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this visit record? 
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmDeleteVisit}
+                className="bg-red-500 hover:bg-red-600"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );

@@ -4,9 +4,28 @@ import Layout from "@/components/Layout";
 import { Church } from "@/types";
 import { churches as allChurches } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
-import { Search, MapPin, Clock, Heart, X, ExternalLink } from "lucide-react";
+import { 
+  Search, 
+  MapPin, 
+  Clock, 
+  Heart, 
+  X, 
+  ExternalLink, 
+  AlertTriangle 
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import ChurchDetails from "@/components/ChurchDetails";
+import { useToast } from "@/hooks/use-toast";
 
 // Mock saved churches (in a real app, this would come from the database)
 const mockSavedIds = ["1", "4", "5"];
@@ -15,9 +34,13 @@ const Saved = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const [selectedChurch, setSelectedChurch] = useState<Church | null>(null);
+  const [savedIds, setSavedIds] = useState<string[]>(mockSavedIds);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [churchToDelete, setChurchToDelete] = useState<Church | null>(null);
+  const { toast } = useToast();
 
   // Filter churches that the user has saved (swiped right on)
-  const savedChurches = allChurches.filter(church => mockSavedIds.includes(church.id));
+  const savedChurches = allChurches.filter(church => savedIds.includes(church.id));
   
   // Filter based on search term
   const filteredChurches = searchTerm
@@ -31,6 +54,26 @@ const Saved = () => {
   const handleViewDetails = (church: Church) => {
     setSelectedChurch(church);
     setShowDetails(true);
+  };
+
+  const handleRemoveChurch = (church: Church) => {
+    setChurchToDelete(church);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmRemoveChurch = () => {
+    if (!churchToDelete) return;
+    
+    // Remove the church from saved list
+    setSavedIds(prev => prev.filter(id => id !== churchToDelete.id));
+    
+    toast({
+      title: "Church Removed",
+      description: `${churchToDelete.name} has been removed from your saved churches.`,
+    });
+    
+    setShowDeleteDialog(false);
+    setChurchToDelete(null);
   };
 
   return (
@@ -117,6 +160,7 @@ const Saved = () => {
                       variant="outline" 
                       size="sm" 
                       className="text-red-500 hover:text-red-700"
+                      onClick={() => handleRemoveChurch(church)}
                     >
                       <X className="h-4 w-4" />
                     </Button>
@@ -159,6 +203,31 @@ const Saved = () => {
             onClose={() => setShowDetails(false)}
           />
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center">
+                <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
+                Remove Saved Church
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to remove {churchToDelete?.name} from your saved churches?
+                This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={confirmRemoveChurch}
+                className="bg-red-500 hover:bg-red-600"
+              >
+                Remove
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );

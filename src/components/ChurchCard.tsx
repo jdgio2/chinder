@@ -105,7 +105,7 @@ const ChurchCard: React.FC<ChurchCardProps> = ({ church, onSwipe, onViewDetails 
     <div
       className={`swipe-card rounded-xl overflow-hidden shadow-lg bg-white ${swipeClass} ${
         dragging ? `dragging-${dragging}` : ""
-      }`}
+      } select-none`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
